@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # The sandbox runner, classifier, and scenario generator print emoji status
 # messages (🚀, ✅, ⏭️, etc.). On Windows, uvicorn's stdout defaults to the
@@ -643,7 +644,10 @@ _RUNS: dict[str, dict[str, Any]] = {}
 
 
 def _execute_run(run_id: str) -> None:
+    """Execute pending scenarios and classify traces with bounded parallelism."""
     run = _RUNS[run_id]
+    MAX_WORKERS = 4
+
     try:
         sandbox_runner, classifier_module = _import_sandbox_and_classifier()
 
@@ -651,30 +655,79 @@ def _execute_run(run_id: str) -> None:
         scenarios = sandbox_runner.load_scenarios()
         run["total"] = len(scenarios)
 
-        for scenario in scenarios:
-            scenario_id = scenario["id"]
-            trace_path = TRACES_DIR / f"{scenario_id}.json"
-            if not trace_path.exists():
-                try:
-                    sandbox_runner.run_scenario(scenario)
-                except Exception as error:  # keep going; one bad scenario shouldn't kill the run
-                    run["errors"].append(f"{scenario_id}: {error}")
-            run["executed"] = sum(
-                1 for s in scenarios if (TRACES_DIR / f"{s['id']}.json").exists()
-            )
+        pending_scenarios = [
+            scenario
+            for scenario in scenarios
+            if not (TRACES_DIR / f"{scenario['id']}.json").exists()
+        ]
+
+        run["executed"] = sum(
+            1 for scenario in scenarios
+            if (TRACES_DIR / f"{scenario['id']}.json").exists()
+        )
+
+        if pending_scenarios:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                future_to_scenario = {
+                    executor.submit(sandbox_runner.run_scenario, scenario): scenario
+                    for scenario in pending_scenarios
+                }
+                for future in as_completed(future_to_scenario):
+                    scenario = future_to_scenario[future]
+                    scenario_id = scenario["id"]
+                    try:
+                        future.result()
+                    except Exception as error:
+                        run["errors"].append(f"{scenario_id}: {error}")
+                    run["executed"] = sum(
+                        1 for s in scenarios
+                        if (TRACES_DIR / f"{s['id']}.json").exists()
+                    )
 
         run["status"] = "classifying"
         trace_files = sorted(TRACES_DIR.glob("S*.json"))
-        for trace_file in trace_files:
-            try:
-                classifier_module.classify_trace(trace_file)
-            except Exception as error:
-                run["errors"].append(f"{trace_file.stem}: {error}")
-            run["classified"] = sum(
-                1 for f in trace_files if (CLASSIFICATIONS_DIR / f.name).exists()
-            )
+        pending_classifications = [
+            trace_file
+            for trace_file in trace_files
+            if not (CLASSIFICATIONS_DIR / trace_file.name).exists()
+        ]
 
-        run["status"] = "completed"
+        if pending_classifications:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                future_to_trace = {
+                    executor.submit(classifier_module.classify_trace, trace_file): trace_file
+                    for trace_file in pending_classifications
+                }
+                for future in as_completed(future_to_trace):
+                    trace_file = future_to_trace[future]
+                    try:
+                        future.result()
+                    except Exception as error:
+                        run["errors"].append(f"{trace_file.stem}: {error}")
+                    run["classified"] = sum(
+                        1 for f in trace_files
+                        if (CLASSIFICATIONS_DIR / f.name).exists()
+                    )
+
+        run["executed"] = sum(
+            1 for scenario in scenarios
+            if (TRACES_DIR / f"{scenario['id']}.json").exists()
+        )
+        run["classified"] = sum(
+            1 for trace_file in trace_files
+            if (CLASSIFICATIONS_DIR / trace_file.name).exists()
+        )
+        #run["status"] = "completed"
+        if run["executed"] == run["total"] and run["classified"] == run["total"]:
+            run["status"] = "completed"
+        else:
+            run["status"] = "failed"
+            run["error"] = (
+                f"Run incomplete: "
+                f"{run['executed']}/{run['total']} executed, "
+                f"{run['classified']}/{run['total']} classified."
+        )
+
     except HTTPException as error:
         run["status"] = "failed"
         run["error"] = error.detail

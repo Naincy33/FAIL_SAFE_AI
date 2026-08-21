@@ -15,7 +15,7 @@ except ModuleNotFoundError:
     from llm.groq_client import groq_chat_completion
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-MODEL_NAME = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+MODEL_NAME = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 
 # ==========================================
 # 1. CUSTOMER SUPPORT & ORDER MANAGEMENT AGENT
@@ -215,11 +215,12 @@ def _build_groq_tools(tool_configs):
     ]
 
 
-def load_registered_aut() -> None:
-    """Register the user-provided Agent Under Test from agent_config.json."""
+def load_registered_aut() -> dict:
+    """Load the current Agent Under Test config without mutating global state."""
     config_path = Path(__file__).resolve().parents[1] / "agent_config.json"
     config = load_agent_config(config_path)
-    AGENT_REGISTRY["aut"] = {
+
+    return {
         "system_instruction": config["system_prompt"],
         "tools": _build_groq_tools(config["tools"]),
     }
@@ -239,11 +240,11 @@ def run_agent(agent_type: str, user_prompt: str, mock_tool_executor, max_turns: 
     :return: Full execution trace dictionary
     """
     if agent_type == "aut":
-        load_registered_aut()
-    if agent_type not in AGENT_REGISTRY:
-        raise ValueError(f"Unknown agent type: {agent_type}")
-
-    config = AGENT_REGISTRY[agent_type]
+        config = load_registered_aut()
+    else:
+        if agent_type not in AGENT_REGISTRY:
+            raise ValueError(f"Unknown agent type: {agent_type}")
+        config = AGENT_REGISTRY[agent_type]
     messages = [
         {"role": "system", "content": config["system_instruction"]},
         {"role": "user", "content": user_prompt},
