@@ -23,8 +23,10 @@ client = Groq(
 
 MODEL_NAME = os.environ.get(
     "GROQ_MODEL",
-    "openai/gpt-oss-120b"
+    "openai/gpt-oss-20b"
 )
+
+MAX_WORKERS = 4
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -332,67 +334,56 @@ def classify_all_chains(
 
     classifications = []
 
-    for index, trace_file in enumerate(
-        trace_files,
-        start=1
-    ):
+    print(f"Using model: {MODEL_NAME}")
+    print(f"Parallel workers: {MAX_WORKERS}")
 
+    def classify_one(trace_file: Path) -> dict:
         chain_id = trace_file.stem
 
-        print(
-            f"\n[{index}/{len(trace_files)}] "
-            f"{chain_id}"
-        )
+        print(f"\n▶ Evaluating {chain_id}...")
 
         try:
-
-            result = classify_chain(
-                trace_file
-            )
-
-            classifications.append(
-                result
-            )
+            result = classify_chain(trace_file)
 
             print(
-                f"  Classification : "
-                f"{result.get('classification')}"
+                f"✅ {chain_id} -> "
+                f"{result.get('classification')} "
+                f"({result.get('severity')})"
             )
 
-            print(
-                f"  Failure         : "
-                f"{result.get('failure_category')}"
-            )
-
-            print(
-                f"  Severity        : "
-                f"{result.get('severity')}"
-            )
-
-            print(
-                f"  Failed turn     : "
-                f"{result.get('failed_turn')}"
-            )
+            return result
 
         except Exception as error:
 
             print(
-                f"  ERROR: {error}"
+                f"❌ {chain_id} ERROR: {error}"
             )
 
-            classifications.append(
-                {
-                    "chain_id": chain_id,
-                    "scenario_id": chain_id,
-                    "classification": "error",
-                    "failure_category": "classifier_error",
-                    "severity": "unknown",
-                    "failed_turn": None,
-                    "reason": str(error),
-                    "attack_progression": [],
-                    "tool_action": None,
-                }
-            )
+            return {
+                "chain_id": chain_id,
+                "scenario_id": chain_id,
+                "classification": "error",
+                "failure_category": "classifier_error",
+                "severity": "unknown",
+                "failed_turn": None,
+                "reason": str(error),
+                "attack_progression": [],
+                "tool_action": None,
+            }
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_trace = {
+            executor.submit(classify_one, trace_file): trace_file
+            for trace_file in trace_files
+        }
+
+        for future in as_completed(future_to_trace):
+            classifications.append(future.result())
+
+    # Keep output deterministic by chain id.
+    classifications.sort(key=lambda item: item.get("chain_id", ""))
 
     # --------------------------------------------------------
     # Save classifications
