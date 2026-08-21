@@ -35,12 +35,14 @@ from pydantic import BaseModel
 
 from Backend import agent_ingestion
 
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+
 # Loaded once here, at the actual process entrypoint, so GROQ_API_KEY is in
 # os.environ before any request is served. agent_ingestion.py reads it
 # directly via os.getenv without calling load_dotenv() itself, so a request
 # to the plain-English endpoint could otherwise miss a key that's genuinely
 # on disk, if it happens to be the first Groq-related call in the process.
-load_dotenv()
+load_dotenv(BACKEND_DIR / ".env")
 
 app = FastAPI(title="FailSafe-AI API")
 
@@ -59,7 +61,6 @@ app.add_middleware(
 # configured Groq key. Modules that actually need to call Groq
 # (sandbox_runner, classifier_module, the scenario generator) are imported
 # lazily, only inside the handlers that perform those calls.
-BACKEND_DIR = Path(__file__).resolve().parents[1]
 SCENARIOS_FILE = BACKEND_DIR / "data" / "scenarios.json"
 SCENARIOS_META_FILE = BACKEND_DIR / "data" / "scenarios_meta.json"
 GENERATION_PROGRESS_FILE = BACKEND_DIR / "data" / "scenario_generation_progress.json"
