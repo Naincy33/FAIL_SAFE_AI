@@ -7,6 +7,7 @@ import {
     PlayCircle,
     FileBarChart,
     GitBranch,
+    ShieldAlert,
     Settings as SettingsIcon,
     Moon,
     Sun,
@@ -21,6 +22,8 @@ const NAV_ITEMS = [
     { to: '/scenarios', label: 'Scenarios', icon: FlaskConical },
     { to: '/test-runs', label: 'Test Runs', icon: PlayCircle },
     { to: '/run-reports', label: 'Run Reports', icon: FileBarChart },
+    { to: '/guardtrail', label: 'Safety / GuardTrail', icon: ShieldAlert },
+    { to: '/attack-chains', label: 'Attack Chains', icon: GitBranch },
     { to: '/traces', label: 'Traces', icon: GitBranch },
     { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]

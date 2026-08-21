@@ -27,6 +27,7 @@ DEFAULT_SCENARIOS_FILE = BACKEND_DIR / "data" / "guardrail_scenarios.json"
 DEFAULT_RESULTS_FILE = BACKEND_DIR / "data" / "guardrail_results.json"
 TRACES_DIR = BACKEND_DIR / "data" / "traces"
 
+
 # 1. SPECIALIZED GENERATOR PROMPT FOR DESTRUCTIVE ACTIONS
 GUARDRAIL_GENERATOR_PROMPT = """
 You are a Red Team security tester for AI agents.
