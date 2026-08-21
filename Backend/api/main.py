@@ -10,6 +10,7 @@ Python modules directly.
 import hashlib
 import importlib
 import json
+import re
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -65,6 +66,23 @@ SCENARIOS_META_FILE = BACKEND_DIR / "data" / "scenarios_meta.json"
 GENERATION_PROGRESS_FILE = BACKEND_DIR / "data" / "scenario_generation_progress.json"
 TRACES_DIR = BACKEND_DIR / "data" / "traces"
 CLASSIFICATIONS_DIR = BACKEND_DIR / "data" / "classifications"
+GUARDRAIL_RESULTS_FILE = (
+    BACKEND_DIR / "data" / "guardrail_results.json"
+)
+ATTACK_CHAINS_DIR = BACKEND_DIR / "data" / "attack_chains"
+
+ATTACK_CHAINS_FILE = (
+    ATTACK_CHAINS_DIR / "attack_chains.json"
+)
+
+CHAIN_CLASSIFICATIONS_FILE = (
+    ATTACK_CHAINS_DIR / "chain_classifications.json"
+)
+ATTACK_CHAIN_TRACES_DIR = (
+    ATTACK_CHAINS_DIR / "traces"
+)
+PATCHES_DIR = ATTACK_CHAINS_DIR / "patches"
+PATCH_RESULTS_DIR = ATTACK_CHAINS_DIR / "patch_results"
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +118,25 @@ def _read_json(path: Path) -> Optional[dict]:
             status_code=500,
             detail=f"Malformed JSON in {path.name}: {error.msg}",
         ) from error
+
+
+def _validate_chain_id(chain_id: str) -> str:
+    """Allow only artifact ids when resolving chain-specific files."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", chain_id):
+        raise HTTPException(status_code=400, detail="Invalid attack-chain id.")
+    return chain_id
+
+
+def _load_chain_classification(chain_id: str) -> dict:
+    classifications = _read_json(CHAIN_CLASSIFICATIONS_FILE) or []
+    for classification in classifications:
+        current_id = classification.get("chain_id") or classification.get("scenario_id")
+        if current_id == chain_id:
+            return classification
+    raise HTTPException(
+        status_code=404,
+        detail=f"No classification found for attack chain '{chain_id}'.",
+    )
 
 
 def _load_scenarios() -> list[dict]:
@@ -420,7 +457,183 @@ def get_results():
         classification = _read_json(CLASSIFICATIONS_DIR / f"{scenario_id}.json")
         results.append({**scenario, "trace": trace, "classification": classification})
     return results
+#GuardTrail
+@app.get("/guardtrail/results")
+def get_guardrail_results():
+    if not GUARDRAIL_RESULTS_FILE.exists():
+        return []
 
+    return _read_json(GUARDRAIL_RESULTS_FILE) or []
+
+
+_GUARDRAIL_RUNS: dict[str, dict[str, Any]] = {}
+
+
+def _run_guardrail_audit(job_id: str) -> None:
+    job = _GUARDRAIL_RUNS[job_id]
+    try:
+        job["status"] = "running"
+        guardtrail = importlib.import_module("Backend.gaurdTrail")
+        config_file = BACKEND_DIR / "agent_config.json"
+        guardtrail.run_feature_6(agent_type="aut", agent_config_file=config_file)
+        job["status"] = "completed"
+        job["result_count"] = len(_read_json(GUARDRAIL_RESULTS_FILE) or [])
+    except Exception as error:
+        job["status"] = "failed"
+        job["error"] = str(error)
+    finally:
+        job["finished_at"] = _now_iso()
+
+
+@app.post("/guardtrail/run")
+def run_guardrail_audit(background_tasks: BackgroundTasks):
+    """Start the complete GuardTrail generation, execution, and evaluation pipeline."""
+    active = next(
+        (job for job in _GUARDRAIL_RUNS.values() if job["status"] in ("queued", "running")),
+        None,
+    )
+    if active:
+        raise HTTPException(status_code=409, detail=f"A GuardTrail audit is already running ('{active['id']}').")
+
+    try:
+        agent_ingestion.load_agent_config()
+        importlib.import_module("Backend.gaurdTrail")
+    except agent_ingestion.AgentConfigError as error:
+        raise HTTPException(status_code=400, detail=f"Cannot run GuardTrail: {error}") from error
+    except Exception as error:
+        raise HTTPException(status_code=424, detail=f"GuardTrail unavailable: {error}") from error
+
+    job_id = f"GUARD_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    job = {
+        "id": job_id,
+        "status": "queued",
+        "started_at": _now_iso(),
+        "finished_at": None,
+        "result_count": None,
+        "error": None,
+    }
+    _GUARDRAIL_RUNS[job_id] = job
+    background_tasks.add_task(_run_guardrail_audit, job_id)
+    return job
+
+
+@app.get("/guardtrail/run/{job_id}")
+def get_guardrail_run(job_id: str):
+    job = _GUARDRAIL_RUNS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No GuardTrail job found with id '{job_id}'.")
+    return job
+
+# ---------------------------------------------------------------------------
+# Attack Chains
+# ---------------------------------------------------------------------------
+
+@app.get("/attack-chains")
+def get_attack_chains():
+    """Return all generated multi-turn attack chains."""
+    if not ATTACK_CHAINS_FILE.exists():
+        return []
+
+    return _read_json(ATTACK_CHAINS_FILE) or []
+
+
+@app.get("/attack-chains/{chain_id}/trace")
+def get_attack_chain_trace(chain_id: str):
+    """Return the execution trace for one attack chain."""
+    chain_id = _validate_chain_id(chain_id)
+    trace_file = ATTACK_CHAIN_TRACES_DIR / f"{chain_id}.json"
+
+    if not trace_file.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"No trace found for attack chain '{chain_id}'."
+        )
+
+    return _read_json(trace_file)
+
+
+@app.get("/attack-chains/{chain_id}/classification")
+def get_attack_chain_classification(chain_id: str):
+    """Return the classifier result for one attack chain."""
+    chain_id = _validate_chain_id(chain_id)
+    if not CHAIN_CLASSIFICATIONS_FILE.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Attack-chain classifications not found."
+        )
+
+    return _load_chain_classification(chain_id)
+
+
+@app.get("/attack-chains/{chain_id}/patch")
+def get_attack_chain_patch(chain_id: str):
+    """Return the persisted prompt patch for one attack chain."""
+    chain_id = _validate_chain_id(chain_id)
+    patch_file = PATCHES_DIR / f"{chain_id}_patch.json"
+    if not patch_file.exists():
+        raise HTTPException(status_code=404, detail=f"No patch found for attack chain '{chain_id}'.")
+    return _read_json(patch_file)
+
+
+@app.get("/attack-chains/{chain_id}/patch-result")
+def get_attack_chain_patch_result(chain_id: str):
+    """Return the persisted before/after result for a patch retest."""
+    chain_id = _validate_chain_id(chain_id)
+    result_file = PATCH_RESULTS_DIR / f"{chain_id}_retest.json"
+    if not result_file.exists():
+        raise HTTPException(status_code=404, detail=f"No patch retest found for attack chain '{chain_id}'.")
+    return _read_json(result_file)
+
+
+@app.post("/attack-chains/{chain_id}/patch")
+def create_attack_chain_patch(chain_id: str):
+    """Generate and persist a prompt patch using the chain's unsafe evidence."""
+    chain_id = _validate_chain_id(chain_id)
+    classification = _load_chain_classification(chain_id)
+    if classification.get("classification") != "unsafe":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Attack chain '{chain_id}' is classified as safe; no prompt patch is required.",
+        )
+    try:
+        patcher = importlib.import_module("Backend.multi_turn.chain_patcher")
+        return patcher.generate_chain_patch(classification)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=424, detail=f"Patch generation unavailable: {error}") from error
+
+
+@app.post("/attack-chains/{chain_id}/patch/retest")
+def retest_attack_chain_patch(chain_id: str):
+    """Execute one chain with its saved patch and persist the comparison."""
+    chain_id = _validate_chain_id(chain_id)
+    patch_file = PATCHES_DIR / f"{chain_id}_patch.json"
+    if not patch_file.exists():
+        raise HTTPException(status_code=404, detail=f"No patch found for attack chain '{chain_id}'.")
+
+    try:
+        chains = _read_json(ATTACK_CHAINS_FILE) or []
+        chain = next(
+            (item for item in chains if (item.get("chain_id") or item.get("id")) == chain_id),
+            None,
+        )
+        if chain is None:
+            raise HTTPException(status_code=404, detail=f"No attack chain found with id '{chain_id}'.")
+
+        retester = importlib.import_module("Backend.multi_turn.patch_retester")
+        patch_data = _read_json(patch_file) or {}
+        return retester.retest_chain(chain=chain, patch_data=patch_data)
+    except HTTPException:
+        raise
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=424, detail=f"Patch retest unavailable: {error}") from error
 
 # ---------------------------------------------------------------------------
 # Runs (sandbox execution + classification, tracked in-memory)

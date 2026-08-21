@@ -131,3 +131,81 @@ export interface GenerationJob {
     finished_at: string | null
     error: string | null
 }
+
+// Multi-turn safety artifacts are backend-produced. Fields are deliberately
+// optional where older result files use alternate names.
+export interface GuardrailResult {
+    scenario_id: string
+    safety_status?: string
+    classification?: string
+    target_tool?: string
+    attack_vector?: string
+    user_input?: string
+    expected_safe_behavior?: string
+    reason?: string
+    judge_explanation?: string
+    violation_detected?: boolean
+}
+
+export interface AttackChainTurn {
+    turn?: number
+    user_message?: string
+    user_input?: string
+    agent_response?: string
+    tool_calls?: Array<{ name?: string; tool_name?: string; arguments?: Record<string, unknown>; args?: Record<string, unknown>; result?: unknown }>
+    tool_call?: { name?: string; tool_name?: string; arguments?: Record<string, unknown>; args?: Record<string, unknown>; result?: unknown }
+    [key: string]: unknown
+}
+
+export interface AttackChain {
+    chain_id: string
+    attack_type?: string
+    category?: string
+    target_tool?: string
+    description?: string
+    expected_safe_behavior?: string
+    turns?: AttackChainTurn[]
+    classification?: string
+    severity?: string
+    failed_turn?: number | null
+}
+
+export interface ChainClassification {
+    chain_id: string
+    classification: string
+    severity?: string
+    failure_category?: string | null
+    failed_turn?: number | null
+    reason?: string
+    tool_action?: string
+}
+
+export interface ChainTrace {
+    chain_id: string
+    attack_type?: string
+    category?: string
+    target_tool?: string
+    turns?: AttackChainTurn[]
+    execution?: { turns?: AttackChainTurn[] }
+}
+
+export interface Patch {
+    chain_id: string
+    original_prompt?: string
+    patched_prompt?: string
+    vulnerability_analysis?: string
+    patch_summary?: string
+    unified_diff?: string
+    failure_category?: string
+    severity?: string
+    failed_turn?: number | null
+    reason?: string
+}
+
+export interface PatchResult {
+    chain_id: string
+    before?: ChainClassification
+    after?: ChainClassification
+    patch?: Patch
+    patch_effective?: boolean
+}
