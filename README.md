@@ -6,7 +6,7 @@
 [![Prompt Patching](https://img.shields.io/badge/patching-validated-e74c3c)](#multi-turn-attack-chains)
 
 > 📚 **For the research foundation and threat model**, see [docs/SECURITY_RESEARCH.md](docs/SECURITY_RESEARCH.md)  
-> ⚡ **For quick hands-on setup (10 min)**, see [docs/QUICKSTART.md](docs/QUICKSTART.md)
+> ⚡ **For quick hands-on setup**, see [docs/QUICKSTART.md](docs/QUICKSTART.md)
 
 ---
 
