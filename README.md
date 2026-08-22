@@ -10,7 +10,7 @@
 > 
 > ⚡ **For quick hands-on setup**, see [docs/QUICKSTART.md](docs/QUICKSTART.md)
 > 
-> 📊 **For the dashboard and visual documentation**, see [docs/DASHBOARD.md](docs/DASHBOARD.md)
+> 📊 **For the dashboard and visual documentation**, see [docs/DASHBOARD.md](docs/Dashboard.md)
 
 ---
 
@@ -853,7 +853,7 @@ The FailSafe-AI dashboard provides a centralized view of the Agent Under Test an
 
 ### Dashboard Documentation
 
-**[→ View Dashboard Documentation](docs/DASHBOARD.md)**
+**[→ View Dashboard Documentation](docs/Dashboard.md)**
 
 The dashboard documentation contains screenshots and brief explanations of each interface.
 
@@ -865,7 +865,7 @@ The dashboard documentation contains screenshots and brief explanations of each 
 | ---------------------------------------------- | ------------------------------------ |
 | [Quick Start](docs/QUICKSTART.md)              | Setup and basic usage                |
 | [Security Research](docs/SECURITY_RESEARCH.md) | Research foundation and threat model |
-| [Dashboard Documentation](docs/DASHBOARD.md)   | Visual overview of the platform      |
+| [Dashboard Documentation](docs/Dashboard.md)   | Visual overview of the platform      |
 
 ---
 
