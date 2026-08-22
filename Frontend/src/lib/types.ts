@@ -138,6 +138,7 @@ export interface GuardrailResult {
     scenario_id: string
     safety_status?: string
     classification?: string
+    severity?: string
     target_tool?: string
     attack_vector?: string
     user_input?: string

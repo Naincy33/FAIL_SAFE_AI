@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bot, FlaskConical, ShieldAlert, XCircle, UserCog, PlayCircle, Sparkles, FileBarChart, ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Bot, CheckCircle2, CircleAlert, FileBarChart, FlaskConical, GitBranch, PlayCircle, ShieldAlert, ShieldCheck, Sparkles, UserCog, XCircle } from 'lucide-react'
 import { PageHeader, Button } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
 import { LoadingState } from '../components/LoadingState'
@@ -12,6 +12,7 @@ import { AgentOnboarding } from '../components/AgentOnboarding'
 import { getAgentConfig } from '../api/agent'
 import { getResults } from '../api/results'
 import { getScenariosStatus } from '../api/scenarios'
+import { getAttackChains, getGuardrailResults } from '../api/safety'
 import { startRun } from '../api/runs'
 import { ApiError } from '../api/client'
 import { useApi } from '../lib/useApi'
@@ -22,6 +23,8 @@ export function Overview() {
     const agentState = useApi(getAgentConfig, [])
     const resultsState = useApi(getResults, [])
     const statusState = useApi(getScenariosStatus, [])
+    const guardrailState = useApi(getGuardrailResults, [])
+    const attackChainState = useApi(getAttackChains, [])
     const [changingAgent, setChangingAgent] = useState(false)
     const [starting, setStarting] = useState(false)
     const [startError, setStartError] = useState<string | null>(null)
@@ -55,6 +58,8 @@ export function Overview() {
                     agentState.reload()
                     resultsState.reload()
                     statusState.reload()
+                    guardrailState.reload()
+                    attackChainState.reload()
                 }}
                 onCancel={noAgentConfigured ? undefined : () => setChangingAgent(false)}
             />
@@ -76,6 +81,16 @@ export function Overview() {
     const agentConfig = agentState.data
     const results = resultsState.data
     const stats = computeResultStats(results)
+    const guardrails = guardrailState.status === 'success' ? guardrailState.data : []
+    const guardrailViolations = guardrails.filter((result) =>
+        result.violation_detected || /unsafe|violation|fail/i.test(result.safety_status || result.classification || ''),
+    )
+    const criticalViolations = guardrailViolations.filter((result) => result.severity?.toLowerCase() === 'critical').length
+    const chains = attackChainState.status === 'success' ? attackChainState.data : []
+    const testedChains = chains.filter((chain) => Boolean(chain.classification))
+    const failedChains = testedChains.filter((chain) => /unsafe|fail|violation/i.test(chain.classification || '')).length
+    const successfulAttacks = testedChains.filter((chain) => /unsafe|attack|success/i.test(chain.classification || '')).length
+    const attackSuccessRate = testedChains.length > 0 ? Math.round((successfulAttacks / testedChains.length) * 100) : null
 
     return (
         <div>
@@ -110,6 +125,50 @@ export function Overview() {
                         icon={<ShieldAlert size={13} />}
                     />
                 </div>
+
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <SecuritySummaryCard
+                        title="Safety / Guardrails"
+                        icon={<ShieldCheck size={17} />}
+                        href="/guardtrail"
+                        loading={guardrailState.status === 'loading'}
+                        error={guardrailState.status === 'error'}
+                        status={guardrails.length === 0 ? 'No results' : criticalViolations > 0 ? 'Critical' : guardrailViolations.length > 0 ? 'Warning' : 'Passed'}
+                        statusClassName={criticalViolations > 0 || guardrailViolations.length > 0 ? 'text-red-400' : 'text-emerald-400'}
+                        metrics={[
+                            ['Total Guardrails', guardrails.length],
+                            ['Active Guardrails', guardrails.length],
+                            ['Passed / Compliant', Math.max(guardrails.length - guardrailViolations.length, 0)],
+                            ['Violations', guardrailViolations.length],
+                            ['Critical Violations', criticalViolations],
+                        ]}
+                    />
+                    <SecuritySummaryCard
+                        title="Attack Chains"
+                        icon={<GitBranch size={17} />}
+                        href="/attack-chains"
+                        loading={attackChainState.status === 'loading'}
+                        error={attackChainState.status === 'error'}
+                        status={chains.length === 0 ? 'No results' : failedChains > 0 ? 'Warning' : 'Passed'}
+                        statusClassName={failedChains > 0 ? 'text-amber-400' : 'text-emerald-400'}
+                        metrics={[
+                            ['Total Attack Chains', chains.length],
+                            ['Completed / Tested', testedChains.length],
+                            ['Failed Chains', failedChains],
+                            ['Successful Attacks', successfulAttacks],
+                            ['Attack Success Rate', attackSuccessRate === null ? '—' : `${attackSuccessRate}%`],
+                        ]}
+                    />
+                </div>
+
+                <SecurityPosture
+                    guardrailViolations={guardrailViolations.length}
+                    criticalViolations={criticalViolations}
+                    failedChains={failedChains}
+                    scenarioFailures={stats.failed}
+                    loading={guardrailState.status === 'loading' || attackChainState.status === 'loading'}
+                    unavailable={guardrailState.status === 'error' || attackChainState.status === 'error'}
+                />
 
                 {statusState.status === 'success' && (
                     <StaleScenariosBanner status={statusState.data} linkTo="/scenarios" />
@@ -238,6 +297,104 @@ export function Overview() {
                     </div>
                 )}
             </div>
+        </div>
+    )
+}
+
+function SecuritySummaryCard({
+    title,
+    icon,
+    href,
+    loading,
+    error,
+    status,
+    statusClassName,
+    metrics,
+}: {
+    title: string
+    icon: React.ReactNode
+    href: string
+    loading: boolean
+    error: boolean
+    status: string
+    statusClassName: string
+    metrics: [string, string | number][]
+}) {
+    return (
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 transition-colors hover:border-[var(--accent)]/40 hover:bg-[var(--surface-2)]">
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <span className="text-[var(--accent)]">{icon}</span>
+                    {title}
+                </div>
+                <span className={`inline-flex items-center gap-1 text-xs font-medium ${statusClassName}`}>
+                    {status === 'Critical' || status === 'Warning' ? <AlertTriangle size={13} /> : <CheckCircle2 size={13} />}
+                    {loading ? 'Loading…' : error ? 'Unavailable' : status}
+                </span>
+            </div>
+            {error ? (
+                <p className="mt-4 text-sm text-[var(--text-faint)]">Summary unavailable. The detail page may have more information.</p>
+            ) : (
+                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-5">
+                    {metrics.map(([label, value]) => (
+                        <div key={label}>
+                            <div className="text-xs text-[var(--text-faint)]">{label}</div>
+                            <div className="mt-1 text-lg font-semibold text-[var(--text)]">{loading ? '—' : value}</div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <Link to={href} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[var(--accent)] hover:underline">
+                View {title} <ArrowRight size={13} />
+            </Link>
+        </section>
+    )
+}
+
+function SecurityPosture({
+    guardrailViolations,
+    criticalViolations,
+    failedChains,
+    scenarioFailures,
+    loading,
+    unavailable,
+}: {
+    guardrailViolations: number
+    criticalViolations: number
+    failedChains: number
+    scenarioFailures: number
+    loading: boolean
+    unavailable: boolean
+}) {
+    const overallStatus = loading ? 'Loading' : unavailable ? 'Partial data' : criticalViolations > 0 ? 'Critical' : guardrailViolations > 0 || failedChains > 0 || scenarioFailures > 0 ? 'Warning' : 'Passed'
+    const overallClass = overallStatus === 'Critical' ? 'text-red-400' : overallStatus === 'Warning' ? 'text-amber-400' : 'text-[var(--text-muted)]'
+    return (
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-sm font-semibold text-[var(--text)]">Security Posture</h2>
+                    <p className="mt-1 text-xs text-[var(--text-faint)]">Current safety signals across evaluations and attack testing.</p>
+                </div>
+                <div className={`flex items-center gap-1.5 text-sm font-semibold ${overallClass}`}>
+                    {overallStatus === 'Passed' ? <CheckCircle2 size={15} /> : <CircleAlert size={15} />}
+                    {overallStatus}
+                </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <PostureMetric label="Guardrail violations" value={guardrailViolations} />
+                <PostureMetric label="Critical violations" value={criticalViolations} />
+                <PostureMetric label="Attack chain failures" value={failedChains} />
+                <PostureMetric label="Scenario failures" value={scenarioFailures} />
+            </div>
+        </section>
+    )
+}
+
+function PostureMetric({ label, value }: { label: string; value: number }) {
+    return (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2">
+            <span className="text-xs text-[var(--text-muted)]">{label}</span>
+            <span className={`text-sm font-semibold ${value > 0 ? 'text-red-400' : 'text-[var(--text)]'}`}>{value}</span>
         </div>
     )
 }

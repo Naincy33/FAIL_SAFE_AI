@@ -2,7 +2,10 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from groq import Groq
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 try:
     from Backend.agent_ingestion import load_agent_config
@@ -15,8 +18,8 @@ except ModuleNotFoundError:
     from llm.groq_client import groq_chat_completion
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-MODEL_NAME = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
+MODEL_NAME = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 # ==========================================
 # 1. CUSTOMER SUPPORT & ORDER MANAGEMENT AGENT
 # ==========================================
