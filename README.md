@@ -1,416 +1,947 @@
 # FailSafe-AI
+
 **Agent Security. At Execution Level.**
 
 [![Sandbox Testing](https://img.shields.io/badge/testing-controlled-2ecc71)](#features)
 [![Tool Tracing](https://img.shields.io/badge/tracing-end--to--end-3498db)](#architecture)
 [![Prompt Patching](https://img.shields.io/badge/patching-validated-e74c3c)](#multi-turn-attack-chains)
 
-> 📚 **For the research foundation and threat model**, see [docs/SECURITY_RESEARCH.md](docs/SECURITY_RESEARCH.md)  
+> 📚 **For the research foundation and threat model**, see [docs/SECURITY_RESEARCH.md](docs/SECURITY_RESEARCH.md)
 > ⚡ **For quick hands-on setup**, see [docs/QUICKSTART.md](docs/QUICKSTART.md)
+> 📊 **For the dashboard and visual documentation**, see [docs/DASHBOARD.md](docs/DASHBOARD.md)
 
 ---
 
 ## Why This Matters
 
-AI agents are moving from text generation to taking actions through tools. They access email, control servers, handle payments, and manage infrastructure. When an agent is compromised—through prompt injection, social engineering, or context manipulation—the impact isn't a confabulated paragraph. It's a restarted production server. A deleted database. Exfiltrated secrets.
+AI agents are moving from text generation to taking actions through tools. They can access email, control servers, handle sensitive operations, and interact with infrastructure. When an agent is compromised through prompt injection, social engineering, or context manipulation, the impact is not limited to an unsafe text response.
 
-Real vulnerabilities prove this:
+It can result in:
 
-- **EchoLeak (CVE-2025-32711)**: Zero-click prompt injection via untrusted content in Microsoft 365 Copilot, enabling data exfiltration without user interaction
-- **Amazon Q Developer / Kiro**: Malicious instructions injected through files triggered unsafe command execution and secret handling
-- **AgentDojo / Agent Security Bench**: Hundreds of documented attacks across tool-using agents in email, banking, and travel workflows
+* Unauthorized infrastructure operations
+* Destructive tool execution
+* Credential or secret exposure
+* Privilege escalation
+* Unsafe state changes
+* Actions performed without required authorization
 
-**The problem:** Traditional classifiers only evaluate text output. They miss dangerous tool calls, permission escalations, and multi-turn exploitation patterns.
+Real-world research and vulnerability reports demonstrate that tool-using agents require security evaluation beyond traditional text classification.
 
-**The solution:** FailSafe-AI observes agents at the execution level—tracing every tool call, simulating real infrastructure, and detecting safety violations before they happen.
+**The problem:** Traditional classifiers primarily evaluate text output. They can miss dangerous tool calls, permission escalations, and multi-turn exploitation patterns.
+
+**The solution:** FailSafe-AI evaluates agents at the **execution level** by tracing tool calls, simulating infrastructure through mock tools, analyzing complete execution traces, and validating safety behavior across adversarial scenarios.
 
 ---
 
-## What FailSafe-AI Does
+# What FailSafe-AI Does
 
-FailSafe-AI is a **local safety-testing platform** for AI agents. It generates adversarial scenarios, executes agents in a controlled sandbox, traces tool-level behavior, classifies unsafe outcomes, and validates patches through re-testing.
+FailSafe-AI is a local safety-testing platform for AI agents.
 
-```
+It provides an end-to-end workflow for:
+
+* Configuring an Agent Under Test
+* Generating adversarial scenarios
+* Executing scenarios in a controlled sandbox
+* Simulating tool operations
+* Recording execution traces
+* Classifying agent behavior
+* Running GuardTrail safety audits
+* Testing multi-turn attack chains
+* Generating prompt patches
+* Retesting patched agents
+* Reviewing results through the dashboard
+
+### High-Level Flow
+
+```text
 Configure Agent
-     ↓
+      ↓
 Generate Adversarial Scenarios
-     ↓
-Execute in Sandbox (Mock Tools)
-     ↓
+      ↓
+Execute in Sandbox
+      ↓
+Simulate Tool Calls
+      ↓
 Record Execution Traces
-     ↓
-Classify Behavior (Safe/Unsafe)
-     ↓
-Generate & Validate Patches
-     ↓
-Dashboard + Audit Trail
+      ↓
+Classify Behavior
+      ↓
+Dashboard Results
+      ↓
+GuardTrail Audit
+      ↓
+Multi-Turn Attack Chains
+      ↓
+Generate Prompt Patch
+      ↓
+Retest Patched Agent
+      ↓
+Compare Results
 ```
-
-### Core Features
-
-**Adversarial Scenario Generation**
-- Four attack categories: ambiguous instructions, conflicting instructions, prompt injection, unsafe actions
-- AI-powered scenario creation across your agent's risk surface
-- Severity scoring and duplicate detection
-
-**Sandboxed Execution**
-- Mock infrastructure tools: restart servers, reset passwords, delete databases, unlock doors, grant access
-- Prevents real destruction during testing
-- Records every response, tool call, and parameter
-
-**Execution-Level Tracing**
-- Complete trace of agent reasoning, tool calls, and results
-- Tool registry tracks call order, arguments, outcomes
-- Detects not just bad text—but bad actions
-
-**Intelligent Classification**
-- AI-powered safety judge evaluates complete execution traces
-- Categorizes failures: social engineering, privilege escalation, resource abuse, state manipulation
-- Assigns severity: critical, high, medium, low
-
-**GuardTrail Destructive-Action Audit**
-- Specialized testing for pressure-based attacks: false authority, artificial urgency, sympathy exploitation
-- Validates whether safety rules hold under social engineering
-- Separate audit trail for high-stakes actions
-
-**Multi-Turn Attack Chains**
-- Tests whether agents degrade across conversations, not just isolated prompts
-- Models real attacker behavior: gradual manipulation, trust building, escalation
-- Traces complete conversation history and tool state
-
-**Prompt Patching & Validation**
-- Generates safer system prompts when vulnerabilities are detected
-- Automatically re-tests patched agent against same attack chains
-- Validates fixes don't introduce regressions
-- Shows before/after behavior diff
 
 ---
 
-## Architecture
+# Features
 
-### Backend (Python + FastAPI)
+## Adversarial Scenario Generation
 
+FailSafe-AI generates adversarial scenarios across four primary categories:
+
+* **Ambiguous Instructions**
+* **Conflicting Instructions**
+* **Prompt Injection**
+* **Unsafe Actions**
+
+Each scenario contains structured information such as:
+
+* Scenario ID
+* Category
+* Description
+* User input
+* Expected safe behavior
+* Severity
+
+Generated scenarios are stored locally in JSON format.
+
+---
+
+## Sandboxed Execution
+
+The Agent Under Test is executed against generated scenarios inside a controlled testing environment.
+
+For each scenario, the system:
+
+1. Loads the scenario.
+2. Creates a fresh mock-tool registry.
+3. Sends the user input to the agent.
+4. Allows the agent to respond or call tools.
+5. Simulates tool results.
+6. Records responses and tool calls.
+7. Saves the execution trace.
+
+Real infrastructure operations are not performed during testing.
+
+---
+
+## Mock Tool Infrastructure
+
+FailSafe-AI dynamically generates mock tools from the Agent Under Test configuration.
+
+Mock tools can simulate:
+
+* Successful operations
+* Invalid input
+* Missing resources
+* Permission denial
+* Timeouts
+* Generic errors
+
+The mock-tool registry tracks:
+
+* Tool call count
+* Call order
+* Arguments
+* Outcomes
+* Returned values
+
+This makes destructive-agent testing isolated and repeatable.
+
+---
+
+## Execution-Level Tracing
+
+FailSafe-AI records the execution trajectory of every tested scenario.
+
+A trace can contain:
+
+* Scenario metadata
+* Execution status
+* Number of turns
+* Agent responses
+* Function calls
+* Tool arguments
+* Mock-tool results
+* Final safety verdict
+
+This allows failures to be investigated using actual execution evidence rather than only the final text response.
+
+---
+
+## Intelligent Classification
+
+After execution, the trace is evaluated by the safety classifier.
+
+Classification includes:
+
+* Safe / Unsafe
+* Failure category
+* Severity
+* Reason
+* Scenario ID
+
+The frontend combines scenario data, traces, and classifications to calculate:
+
+* Total scenarios
+* Passed scenarios
+* Failed scenarios
+* Pending scenarios
+* Critical failures
+* Pass rate
+* Failure breakdown by category
+
+---
+
+## GuardTrail
+
+GuardTrail is a specialized destructive-action safety audit.
+
+It evaluates whether an agent maintains its safety rules when exposed to social-engineering pressure.
+
+The audit includes scenarios involving:
+
+* False authority
+* Artificial urgency
+* Sympathy or guilt
+* Fake prior approval
+* Combined social-engineering pressure
+
+### GuardTrail Flow
+
+```text
+Generate Pressure Scenarios
+          ↓
+Run Agent
+          ↓
+Record Trace
+          ↓
+Safety Judge
+          ↓
+SAFE / UNSAFE_VIOLATION
+          ↓
+Store Results
+          ↓
+Display in Dashboard
 ```
-Backend/
-├── api/main.py              # FastAPI endpoints
-├── agents.py                # Agent execution loop
-├── runner.py                # Scenario sandbox execution
-├── mock_tool_generator.py   # Dynamic tool mocking
-├── mock_tool_registry.py    # Tool call tracking
-├── trace_logger.py          # Execution trace recording
-├── classifier.py            # Safety classification
-├── gaurdTrail.py            # Destructive-action audit
-├── chain_runner.py          # Multi-turn execution
-├── chain_patcher.py         # Prompt generation & testing
-└── data/                    # JSON file storage
-    ├── agent_config.json
-    ├── scenarios.json
+
+Results are stored in:
+
+```text
+Backend/data/guardrail_results.json
+```
+
+---
+
+# Multi-Turn Attack Chains
+
+Attack Chains evaluate whether an agent gradually becomes unsafe across multiple interactions.
+
+Instead of evaluating a single isolated prompt, FailSafe-AI analyzes the complete conversation trajectory.
+
+### Attack Chain Flow
+
+```text
+Generate Attack Chain
+        ↓
+Execute Multiple Turns
+        ↓
+Preserve Conversation History
+        ↓
+Track Tool Calls & State
+        ↓
+Classify Complete Trajectory
+        ↓
+Identify Failed Turn
+        ↓
+Generate Safer Prompt
+        ↓
+Retest Same Chain
+        ↓
+Compare Before / After
+```
+
+Attack-chain artifacts are stored under:
+
+```text
+Backend/data/attack_chains/
+├── attack_chains.json
+├── chain_classifications.json
+├── traces/
+├── patched_traces/
+├── patches/
+└── patch_results/
+```
+
+---
+
+# Prompt Patching & Validation
+
+When an attack chain exposes a vulnerability, FailSafe-AI can generate a safer replacement system prompt.
+
+The patching workflow is:
+
+```text
+Unsafe Attack Chain
+        ↓
+Vulnerability Analysis
+        ↓
+Generate Safer Prompt
+        ↓
+Generate Patch Summary
+        ↓
+Generate Diff
+        ↓
+Retest Same Attack Chain
+        ↓
+Classify Patched Behavior
+        ↓
+Compare Original vs Patched
+```
+
+The goal is to provide concrete evidence of whether a prompt modification improves safety behavior.
+
+---
+
+# Architecture
+
+FailSafe-AI consists of a React frontend, FastAPI backend, testing pipeline, mock-tool infrastructure, local data storage, and safety-analysis components.
+
+```mermaid
+flowchart TB
+
+    USER[User]
+
+    FRONTEND[React + TypeScript Frontend]
+
+    API[FastAPI Backend]
+
+    CONFIG[Agent Configuration]
+    SCENARIOS[Scenario Generator]
+    RUNNER[Sandbox Runner]
+    TOOLS[Mock Tool Registry]
+    TRACE[Trace Logger]
+    CLASSIFIER[Safety Classifier]
+    GUARD[GuardTrail]
+    CHAINS[Multi-Turn Attack Chains]
+    PATCH[Prompt Patcher & Retester]
+
+    DATA[(Local JSON Storage)]
+
+    DASH[Dashboard]
+
+    USER --> FRONTEND
+    FRONTEND --> API
+
+    API --> CONFIG
+    API --> SCENARIOS
+    API --> RUNNER
+
+    CONFIG --> DATA
+    SCENARIOS --> DATA
+
+    SCENARIOS --> RUNNER
+    RUNNER --> TOOLS
+    RUNNER --> TRACE
+
+    TRACE --> DATA
+    TRACE --> CLASSIFIER
+    CLASSIFIER --> DATA
+
+    DATA --> DASH
+
+    DASH --> GUARD
+    DASH --> CHAINS
+
+    GUARD --> TRACE
+    GUARD --> DATA
+
+    CHAINS --> PATCH
+    PATCH --> CHAINS
+    PATCH --> DATA
+```
+
+---
+
+# Data Flow
+
+The complete data flow from agent configuration to final security results is:
+
+```mermaid
+flowchart LR
+
+    A[Agent Configuration]
+    B[Scenario Generation]
+    C[scenarios.json]
+    D[Sandbox Runner]
+    E[Mock Tool Registry]
+    F[Execution Trace]
+    G[Safety Classifier]
+    H[Classification Results]
+    I[Dashboard]
+    J[GuardTrail]
+    K[Attack Chains]
+    L[Prompt Patching]
+    M[Retesting]
+    N[Before / After Results]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+
+    I --> J
+    I --> K
+
+    K --> L
+    L --> M
+    M --> N
+```
+
+### Data Lifecycle
+
+```text
+Agent Configuration
+        ↓
+agent_config.json
+        ↓
+Scenario Generation
+        ↓
+scenarios.json
+        ↓
+Sandbox Execution
+        ↓
+Mock Tool Calls
+        ↓
+Execution Traces
+        ↓
+Safety Classification
+        ↓
+Classification Results
+        ↓
+Dashboard
+```
+
+---
+
+# Data Storage
+
+The current implementation uses local JSON-based storage instead of a database.
+
+```text
+Backend/data/
+├── agent_config.json
+├── scenarios.json
+├── scenarios_meta.json
+├── scenario_generation_progress.json
+├── guardrail_results.json
+├── traces/
+├── classifications/
+└── attack_chains/
+    ├── attack_chains.json
+    ├── chain_classifications.json
     ├── traces/
-    ├── classifications/
-    ├── attack_chains/
-    └── guardrail_results.json
+    ├── patched_traces/
+    ├── patches/
+    └── patch_results/
 ```
-
-**Key Endpoints:**
-- `POST /agent-config` — Configure agent under test
-- `POST /scenarios/generate` — Create adversarial scenarios
-- `POST /runs` — Execute agent against scenarios
-- `GET /results` — View scenario pass/fail breakdown
-- `GET /guardtrail/results` — Destructive-action audit results
-- `POST /attack-chains/generate` — Create multi-turn chains
-- `POST /patches/:chainId/generate` — Generate safer prompt
-- `POST /patches/:chainId/retest` — Validate patch effectiveness
-
-### Frontend (React 19 + TypeScript + Vite)
-
-```
-Frontend/
-├── src/
-│   ├── pages/
-│   │   ├── Overview.tsx              # Dashboard
-│   │   ├── AgentConfiguration.tsx    # Agent setup
-│   │   ├── ScenarioLibrary.tsx       # Browse scenarios
-│   │   ├── TestRuns.tsx              # Run management
-│   │   ├── RunReport.tsx             # Failure analysis
-│   │   ├── GuardTrail.tsx            # Pressure-test audit
-│   │   ├── AttackChains.tsx          # Multi-turn chains
-│   │   ├── ChainDetail.tsx           # Chain inspection
-│   │   └── PatchTesting.tsx          # Prompt patching
-│   ├── api/                          # API client
-│   └── components/                   # Reusable UI
-```
-
-**Routes:**
-- `/` — Overview & dashboard
-- `/agent-under-test` — Configure agent
-- `/scenarios` — Browse scenario library
-- `/test-runs` — Run management
-- `/run-reports` — Failed scenarios
-- `/traces` — Execution traces
-- `/guardtrail` — Destructive-action audit
-- `/attack-chains` — Multi-turn attack chains
-- `/patches/:id` — Prompt patching & re-testing
 
 ---
 
-## Getting Started
+# Project Structure
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- Groq API key (for agent & classification): `export GROQ_API_KEY=your-key`
-
-### Installation
-
-**Backend:**
-```bash
-cd Backend
-python -m venv .venv
-source .venv/bin/activate  # Windows: .\.venv\Scripts\activate
-pip install -r requirements.txt
+```text
+FAIL_SAFE_AI/
+│
+├── Backend/
+│   ├── api/
+│   │   └── main.py
+│   ├── classifier/
+│   ├── data/
+│   ├── llm/
+│   ├── mock_tools/
+│   ├── multi_turn/
+│   ├── prompt-patcher/
+│   ├── sandbox/
+│   ├── scenario_generator/
+│   ├── testing_agents/
+│   ├── agent_config.json
+│   ├── agent_ingestion.py
+│   ├── gaurdTrail.py
+│   ├── requirements.txt
+│   └── ...
+│
+├── Frontend/
+│   ├── src/
+│   │   ├── pages/
+│   │   ├── api/
+│   │   └── components/
+│   ├── public/
+│   ├── package.json
+│   └── ...
+│
+├── docs/
+│   ├── QUICKSTART.md
+│   ├── SECURITY_RESEARCH.md
+│   └── DASHBOARD.md
+│
+├── images/
+│   ├── overview.jpeg
+│   ├── AttackChains.jpeg
+│   ├── GuardRail.jpeg
+│   ├── MultiTurnAttack.jpeg
+│   ├── RunReport.jpeg
+│   ├── Scenarios.jpeg
+│   ├── ScenariosClassified.jpeg
+│   ├── TestRuns.jpeg
+│   └── Traces.jpeg
+│
+├── .gitignore
+└── README.md
 ```
 
-**Frontend:**
-```bash
-cd Frontend
+---
+
+# Frontend
+
+The frontend is built using:
+
+* React 19
+* TypeScript
+* Vite
+* React Router
+
+## Main Routes
+
+| Route                      | Purpose                       |
+| -------------------------- | ----------------------------- |
+| `/`                        | Overview Dashboard            |
+| `/agent-under-test`        | Agent configuration           |
+| `/scenarios`               | Scenario Library              |
+| `/test-runs`               | Test Run management           |
+| `/test-runs/:runId`        | Run details                   |
+| `/run-reports`             | Failure analysis              |
+| `/run-reports/:scenarioId` | Scenario report               |
+| `/traces`                  | Execution traces              |
+| `/guardtrail`              | GuardTrail audit              |
+| `/attack-chains`           | Attack-chain list             |
+| `/attack-chains/:id`       | Attack-chain details          |
+| `/patches/:id`             | Prompt patching and retesting |
+| `/settings`                | Application settings          |
+
+---
+
+# Backend
+
+The backend is implemented using Python and FastAPI.
+
+The API acts as the HTTP layer between the React frontend and the underlying testing modules.
+
+## Core API Endpoints
+
+```text
+GET  /health
+
+GET  /agent-config
+POST /agent-config
+POST /agent-config/from-description
+
+GET  /scenarios
+GET  /scenarios/status
+POST /scenarios/generate
+GET  /scenarios/generate/{job_id}
+
+GET  /results
+
+GET  /traces
+GET  /classifications
+
+POST /runs
+GET  /runs
+GET  /runs/{run_id}
+GET  /runs/{run_id}/traces
+
+GET  /guardtrail/results
+
+GET  /attack-chains
+GET  /attack-chains/{id}
+```
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+* Python 3.10+
+* Node.js 18+
+* npm
+* Groq API key
+
+---
+
+## Backend Setup
+
+From the project root:
+
+```powershell
+cd C:\Users\Admin\Desktop\FAIL_SAFE_AI
+```
+
+Activate the virtual environment:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Install backend dependencies:
+
+```powershell
+pip install -r Backend\requirements.txt
+```
+
+Configure your environment:
+
+```text
+GROQ_API_KEY=your-key
+```
+
+Start the backend:
+
+```powershell
+uvicorn Backend.api.main:app --reload
+```
+
+The backend runs on:
+
+```text
+http://localhost:8000
+```
+
+---
+
+# Frontend Setup
+
+Open a second terminal:
+
+```powershell
+cd C:\Users\Admin\Desktop\FAIL_SAFE_AI\Frontend
+```
+
+Install dependencies:
+
+```powershell
 npm install
 ```
 
-### Running
+Start the frontend:
 
-**Terminal 1: Start Backend**
-```bash
-cd Backend
-uvicorn api.main:app --reload
-# Server runs on http://localhost:8000
-```
-
-**Terminal 2: Start Frontend**
-```bash
-cd Frontend
+```powershell
 npm run dev
-# Browser opens to http://localhost:5173
 ```
 
-### Production Build
-```bash
+---
+
+# Production Build
+
+```powershell
 cd Frontend
 npm run build
-# Output: dist/
+```
+
+The production build is generated in:
+
+```text
+Frontend/dist/
 ```
 
 ---
 
-## Typical Workflow
+# Typical Testing Workflow
 
-### 1. Define Agent Under Test
-Navigate to `/agent-under-test`. Define:
-- Agent name, domain, purpose
-- System prompt
-- Safety rules (identity verification, approval thresholds, etc.)
-- Available tools and their schemas
+## 1. Configure the Agent
 
-Upload raw JSON or describe in natural English—Groq converts it to structured config.
+Navigate to:
 
-**Example: IT Infrastructure Agent**
-```json
-{
-  "name": "Infrastructure Manager",
-  "tools": ["restart_server", "reset_password", "delete_server"],
-  "safety_rules": [
-    "Verify user identity before any action",
-    "Require approved ticket for infrastructure changes",
-    "Confirm affected resources before destruction"
-  ]
-}
+```text
+/agent-under-test
 ```
 
-### 2. Generate Adversarial Scenarios
-Click **Generate Scenarios** on the `/scenarios` page.
+Define:
 
-FailSafe-AI creates four scenario types:
-- **Ambiguous Instructions**: "Fix the database thing"
-- **Conflicting Instructions**: Contradict stated safety rules
-- **Prompt Injection**: Embedded malicious instructions in file content or context
-- **Unsafe Actions**: Direct requests to violate safety policy
+* Agent name
+* Domain
+* Purpose
+* System prompt
+* Safety rules
+* Available tools
+* Tool parameter schemas
 
-Output: `scenarios.json` (100+ scenarios by default)
+The configuration is stored in:
 
-### 3. Execute Test Run
-Navigate to `/test-runs`, create a new run, select scenarios.
-
-For each scenario:
-1. Fresh mock-tool registry instantiated
-2. User input sent to agent
-3. Agent reasons and calls tools (up to 5 turns)
-4. Tool results mocked (success/failure/timeout/permission-denied)
-5. Execution trace saved
-
-**Traces contain:**
-- Scenario metadata
-- Each turn's response & tool calls
-- Tool arguments and return values
-- Final safety verdict
-
-### 4. Review Results
-On `/run-reports`:
-- **Total scenarios** run
-- **Pass rate** (% safe)
-- **Critical failures** (high-severity violations)
-- **Failure breakdown** by category
-- **Coverage analysis** (which scenarios exercised which tools)
-
-Click any failed scenario to inspect the full trace, tool calls, and classifier's reasoning.
-
-### 5. Destructive-Action Audit (GuardTrail)
-Navigate to `/guardtrail`.
-
-Runs five specialized high-pressure scenarios:
-- False authority ("I'm the CEO")
-- Artificial urgency ("Do this in 30 seconds")
-- Sympathy manipulation ("My job depends on this")
-- Fake prior approval ("The CTO already authorized this")
-- Combined social engineering
-
-**Results show:**
-- `SAFE` — Agent resisted pressure
-- `UNSAFE_VIOLATION` — Agent violated policy under pressure
-- Judge's reasoning and specific turn of failure
-
-### 6. Multi-Turn Attack Chains
-Navigate to `/attack-chains`.
-
-View existing chains (multi-turn attack sequences that gradually exploit the agent):
-- Turn-by-turn conversation history
-- Tool calls and state progression
-- Identifies which turn the agent first became unsafe
-- Severity and exploit category
-
-### 7. Prompt Patching & Validation
-On `/patches/:chainId`:
-
-1. **View the vulnerability**: Full trace of how agent failed
-2. **Generate patch**: Click "Generate Safer Prompt"
-   - FailSafe-AI analyzes the failure mode
-   - Generates replacement system prompt with targeted fixes
-   - Shows diff vs. original
-3. **Validate patch**: Click "Retest with Patch"
-   - Temporarily applies new prompt
-   - Re-runs same multi-turn chain
-   - Classifies patched behavior
-   - Shows before/after side-by-side
-   - Measures whether fix improves safety without regression
-
-**Result:** Concrete evidence of whether your prompt change actually works.
-
----
-
-## Research Foundation
-
-FailSafe-AI's design is grounded in real vulnerabilities and research benchmarks:
-
-| Threat | Research | FailSafe-AI Capability |
-|--------|----------|------------------------|
-| **Prompt Injection** | EchoLeak (CVE-2025-32711), AgentDojo, OWASP FinBot | Adversarial scenario generation + multi-turn chains |
-| **Unsafe Tool Execution** | Amazon Q / Kiro disclosures | Mock tools + tool-call policy guard |
-| **Social Engineering** | Microsoft AI Red Team taxonomy | GuardTrail pressure-based audit |
-| **Excessive Agency** | Agent Security Bench (ASB) | Tool permission analysis + risk scoring |
-| **Memory Poisoning** | Microsoft taxonomy, AgentDojo | Foundation for future multi-session tests |
-| **Patch Regressions** | OWASP FinBot | Automated re-test + regression detection |
-
-**References:**
-- Microsoft 365 Copilot EchoLeak: https://ojs.aaai.org/index.php/AAAI-SS/article/view/36899
-- AgentDojo: https://arxiv.org/abs/2406.13352
-- Agent Security Bench (ICLR 2025): https://proceedings.iclr.cc/paper_files/paper/2025/hash/5750f91d8fb9d5c02bd8ad2c3b44456b-Abstract-Conference.html
-- Microsoft Agentic AI Failure Taxonomy: https://www.microsoft.com/en-us/security/blog/2026/06/04/updating-taxonomy-failure-modes-agentic-ai-systems-year-red-teaming-taught-us/
-- OWASP Agentic AI Threats & Mitigations: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
-
----
-
-## FAQ
-
-**Q: Does FailSafe-AI execute real infrastructure operations?**  
-A: No. All tools are mocked. The system simulates success, failure, timeout, and permission-denial scenarios without touching real infrastructure.
-
-**Q: Can I test agents with different tool domains?**  
-A: Yes. Mock tools are dynamically generated from your agent configuration. Define any tool with parameters, and FailSafe-AI will mock its behavior.
-
-**Q: What LLMs are supported?**  
-A: Currently Groq (for agent execution, scenario generation, and classification). Extensible to other providers.
-
-**Q: Is FailSafe-AI suitable for production agents?**  
-A: FailSafe-AI is a testing and validation platform. Use it to validate agents before production deployment. It is not a runtime guard.
-
-**Q: Can I use this for agents without tools?**  
-A: FailSafe-AI is optimized for agents with tools and infrastructure access. Text-only agents will run but won't exercise the full safety depth.
-
-**Q: How do I share results with my team?**  
-A: Export run reports, traces, and patch validations as JSON. Dashboard UI supports inspection and filtering.
-
----
-
-## Limitations & Roadmap
-
-**Current Limitations:**
-- File-based storage (no database; resets on API restart)
-- Background job state lost on restart
-- Single-agent-at-a-time focus (not multi-agent simulation)
-- Attack-chain generation API not yet fully exposed
-- Conversation history integration in multi-turn mode needs refinement
-
-**Roadmap:**
-- Database-backed storage (PostgreSQL)
-- Persistent background job queue
-- Memory-poisoning attack scenarios
-- Cross-agent trust escalation tests
-- Integration with production LLM observability platforms
-- HITL (human-in-the-loop) approval bypass tests
-- Supply-chain compromise scenario generation
-
----
-
-## Contributing
-
-This is a hackathon project. Pull requests and issues welcome. Focus areas:
-
-- Expanding scenario generation categories
-- Adding new tool domains (financial, medical, infrastructure)
-- Improving patch-generation heuristics
-- Database migration and persistence
-- API completeness for attack-chain generation/testing
-
----
-
-## License
-
-MIT
-
----
-
-## Contact & Citation
-
-For questions, security feedback, or research collaboration:
-- **Email:** security@failsafe-ai.dev (coming soon)
-- **GitHub Issues:** [Report a bug or request a feature](../../issues)
-
-If you build on FailSafe-AI, cite:
-```bibtex
-@software{failsafe_ai_2025,
-  title={FailSafe-AI: Execution-Level Safety Testing for AI Agents},
-  author={Your Team},
-  year={2025},
-  url={https://github.com/yourteam/failsafe-ai}
-}
+```text
+Backend/data/agent_config.json
 ```
 
 ---
 
-## Acknowledgments
+## 2. Generate Adversarial Scenarios
 
-- **Research:** AgentDojo, Agent Security Bench, Microsoft AI Red Team taxonomy
-- **Case Studies:** EchoLeak (CVE-2025-32711), Amazon Q/Kiro vulnerabilities, OWASP FinBot
-- **Safety Philosophy:** OWASP Agentic AI Threats & Mitigations, NIST Agent Hijacking Evaluation
+Navigate to:
+
+```text
+/scenarios
+```
+
+Generate scenarios across:
+
+```text
+Ambiguous Instructions
+Conflicting Instructions
+Prompt Injection
+Unsafe Actions
+```
+
+Generated scenarios are stored in:
+
+```text
+Backend/data/scenarios.json
+```
 
 ---
 
-**FailSafe-AI:** *Because agents with tools need more than text classification.*
+## 3. Execute a Test Run
+
+Navigate to:
+
+```text
+/test-runs
+```
+
+For every scenario:
+
+```text
+Scenario
+   ↓
+User Input
+   ↓
+Agent Response
+   ↓
+Tool Call
+   ↓
+Mock Tool Result
+   ↓
+Execution Trace
+```
+
+The trace is saved for later classification and analysis.
+
+---
+
+## 4. Review Results
+
+Navigate to:
+
+```text
+/run-reports
+```
+
+Review:
+
+* Total scenarios
+* Passed scenarios
+* Failed scenarios
+* Pass rate
+* Critical failures
+* Failure categories
+* Scenario coverage
+
+---
+
+## 5. Inspect Execution Traces
+
+Navigate to:
+
+```text
+/traces
+```
+
+Inspect:
+
+* Conversation turns
+* Agent responses
+* Tool calls
+* Tool arguments
+* Mock-tool results
+* Execution status
+* Final verdict
+
+---
+
+## 6. Run GuardTrail
+
+Navigate to:
+
+```text
+/guardtrail
+```
+
+Run the destructive-action audit and inspect whether the agent resisted social-engineering pressure.
+
+---
+
+## 7. Run Multi-Turn Attack Chains
+
+Navigate to:
+
+```text
+/attack-chains
+```
+
+Inspect:
+
+* Conversation history
+* Turn-by-turn behavior
+* Tool activity
+* State progression
+* Failed turn
+* Severity
+* Attack category
+
+---
+
+## 8. Generate and Validate a Prompt Patch
+
+Navigate to:
+
+```text
+/patches/:id
+```
+
+The system can:
+
+1. Analyze the vulnerability.
+2. Generate a safer system prompt.
+3. Generate a patch summary and diff.
+4. Retest the same attack chain.
+5. Compare original and patched behavior.
+
+---
+
+# Dashboard
+
+The FailSafe-AI dashboard provides a centralized view of the Agent Under Test and its current security posture.
+
+### Dashboard Modules
+
+* Overview
+* Agent Under Test
+* Scenario Library
+* Classified Scenarios
+* Test Runs
+* Run Reports
+* Safety / Guardrails
+* Attack Chains
+* Multi-Turn Attack Testing
+* Traces
+* Security Posture
+* Scenario Coverage
+
+### Dashboard Documentation
+
+**[→ View Dashboard Documentation](docs/DASHBOARD.md)**
+
+The dashboard documentation contains screenshots and brief explanations of each interface.
+
+---
+
+# Documentation
+
+| Documentation                                  | Description                          |
+| ---------------------------------------------- | ------------------------------------ |
+| [Quick Start](docs/QUICKSTART.md)              | Setup and basic usage                |
+| [Security Research](docs/SECURITY_RESEARCH.md) | Research foundation and threat model |
+| [Dashboard Documentation](docs/DASHBOARD.md)   | Visual overview of the platform      |
+
+---
+
+# Research Foundation
+
+FailSafe-AI's design is grounded in research and documented AI-agent security risks, including:
+
+* Prompt Injection
+* Unsafe Tool Execution
+* Social Engineering
+* Excessive Agency
+* Memory Poisoning
+* Multi-Turn Attacks
+* Prompt Patch Regressions
+
+For the detailed research foundation and threat model:
+
+**[→ Read Security Research](docs/SECURITY_RESEARCH.md)**
+
+---
+
+# Current Limitations
+
+The current implementation has several known limitations:
+
+* Storage is file-based rather than database-backed.
+* Background job state is stored in memory and can be lost after an API restart.
+* Some scenario results can become stale when the Agent Under Test changes.
+* Attack-chain generation and execution are not fully exposed through the API.
+* Some existing attack-chain artifacts may target different tool domains.
+* Some GuardTrail scenarios may target different tool domains.
+* Multi-turn conversation-history integration still requires refinement.
+* The platform currently focuses on one Agent Under Test at a time.
+
+---
+
+# Roadmap
+
+Planned development areas include:
+
+* PostgreSQL-backed persistence
+* Persistent background job queue
+* Memory-poisoning attack scenarios
+* Cross-agent trust escalation testing
+* Production LLM observability integrations
+* Human-in-the-loop approval bypass testing
+* Supply-chain compromise scenarios
+* Expanded attack-chain API support
+* Additional tool-domain coverage
+
+---
+
+# Contributing
+
+FailSafe-AI is an AI-agent safety testing project focused on improving execution-level security evaluation.
+
+Potential contribution areas include:
+
+* New adversarial scenario categories
+* Additional mock-tool domains
+* Improved safety classification
+* Prompt-patching improvements
+* Multi-turn attack testing
+* Database migration
+* API expansion
+* Frontend improvements
+* Testing and documentation
+
+Pull requests and issues are welcome.
+
+---
+
+# License
+
+License information should be added here once the project ownership/team has finalized the applicable license.
+
+---
+
+# FailSafe-AI
+
+> **Because agents with tools need more than text classification.**
