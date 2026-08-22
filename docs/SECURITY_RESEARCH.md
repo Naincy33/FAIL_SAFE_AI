@@ -441,4 +441,4 @@ Agent given too many permissions or too much autonomy
 ---
 
 **FailSafe-AI Security Research** v1.0  
-Last Updated: January 2025
+Last Updated: August 2026
