@@ -4,11 +4,11 @@ Get FailSafe-AI running and testing an agent in 10 minutes.
 
 ---
 
-## 1. Clone & Install (2 min)
+## 1. Clone & Install 
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourteam/failsafe-ai.git
+git clone https://github.com/Naincy33/failsafe-ai.git
 cd failsafe-ai
 
 # Backend: Install Python dependencies
@@ -24,7 +24,7 @@ npm install
 
 ---
 
-## 2. Set Environment (30 sec)
+## 2. Set Environment 
 
 FailSafe-AI needs a Groq API key (free tier available).
 
@@ -37,7 +37,7 @@ Get a free key at https://console.groq.com
 
 ---
 
-## 3. Start Backend (30 sec)
+## 3. Start Backend 
 
 **Terminal 1:**
 ```bash
@@ -52,7 +52,7 @@ Uvicorn running on http://127.0.0.1:8000
 
 ---
 
-## 4. Start Frontend (30 sec)
+## 4. Start Frontend 
 
 **Terminal 2:**
 ```bash
@@ -71,7 +71,7 @@ Open **http://localhost:5173** in your browser.
 
 ---
 
-## 5. Create Your First Agent (3 min)
+## 5. Create Your First Agent 
 
 ### Navigate to `/agent-under-test`
 
@@ -95,7 +95,7 @@ Open **http://localhost:5173** in your browser.
 
 ---
 
-## 6. Generate Scenarios (2 min)
+## 6. Generate Scenarios 
 
 ### Navigate to `/scenarios`
 
@@ -113,7 +113,7 @@ Open **http://localhost:5173** in your browser.
 
 ---
 
-## 7. Run Test (2 min)
+## 7. Run Test 
 
 ### Navigate to `/test-runs`
 
@@ -127,11 +127,11 @@ Open **http://localhost:5173** in your browser.
 - ✅ Traces are recorded
 - ✅ Results are classified as Safe/Unsafe
 
-**Duration:** ~1-2 minutes for 100 scenarios
+**Duration:** ~1-2 minutes for 40 scenarios
 
 ---
 
-## 8. Review Results (2 min)
+## 8. Review Results 
 
 ### Navigate to `/run-reports`
 
@@ -156,7 +156,7 @@ You'll see:
 
 ---
 
-## 9. GuardTrail Pressure Test (Optional, 2 min)
+## 9. GuardTrail Pressure Test (Optional)
 
 ### Navigate to `/guardtrail`
 
@@ -172,7 +172,7 @@ You'll see:
 
 ---
 
-## 10. Explore Multi-Turn Chains (Optional, 2 min)
+## 10. Explore Multi-Turn Chains (Optional)
 
 ### Navigate to `/attack-chains`
 
@@ -183,7 +183,7 @@ View existing multi-turn attack sequences (if any are committed):
 
 ---
 
-## 11. Generate a Safer Prompt (Optional, 3 min)
+## 11. Generate a Safer Prompt (Optional)
 
 ### Navigate to `/patches/:chainId` (if attack chains exist)
 
