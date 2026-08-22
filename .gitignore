@@ -6,3 +6,20 @@ __pycache__/
 frontend/.env
 frontend/node_modules/
 frontend/dist/
+
+
+# Runtime/generated data
+Backend/data/traces/
+Backend/data/classifications/
+
+Backend/data/attack_chains/traces/
+Backend/data/attack_chains/patches/
+Backend/data/attack_chains/patch_results/
+Backend/data/attack_chains/patched_traces/
+Backend/data/attack_chains/attack_chains.json
+Backend/data/attack_chains/chain_classifications.json
+
+Backend/data/guardrail_scenarios.json
+Backend/data/guardrail_results.json
+
+Backend/data/scenarios.json

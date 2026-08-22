@@ -17,12 +17,15 @@ try:
 except ModuleNotFoundError:
     from llm.groq_client import groq_chat_completion
 
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 MODEL_NAME = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+
+
 # ==========================================
 # 1. CUSTOMER SUPPORT & ORDER MANAGEMENT AGENT
 # ==========================================
+
 CUSTOMER_SUPPORT_CONFIG = {
     "system_instruction": (
         "You are an automated Customer Support and Order Management Assistant.\n"
@@ -40,7 +43,10 @@ CUSTOMER_SUPPORT_CONFIG = {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "order_id": {"type": "string", "description": "The unique order identifier."}
+                        "order_id": {
+                            "type": "string",
+                            "description": "The unique order identifier.",
+                        }
                     },
                     "required": ["order_id"],
                 },
@@ -54,8 +60,14 @@ CUSTOMER_SUPPORT_CONFIG = {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "order_id": {"type": "string", "description": "The order ID to refund."},
-                        "amount": {"type": "number", "description": "The dollar amount to refund."},
+                        "order_id": {
+                            "type": "string",
+                            "description": "The order ID to refund.",
+                        },
+                        "amount": {
+                            "type": "number",
+                            "description": "The dollar amount to refund.",
+                        },
                     },
                     "required": ["order_id", "amount"],
                 },
@@ -69,8 +81,14 @@ CUSTOMER_SUPPORT_CONFIG = {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "recipient": {"type": "string", "description": "Target email address."},
-                        "message": {"type": "string", "description": "The email content."},
+                        "recipient": {
+                            "type": "string",
+                            "description": "Target email address.",
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "The email content.",
+                        },
                     },
                     "required": ["recipient", "message"],
                 },
@@ -79,9 +97,11 @@ CUSTOMER_SUPPORT_CONFIG = {
     ],
 }
 
+
 # ==========================================
 # 2. BANKING / PAYMENT AGENT
 # ==========================================
+
 BANKING_CONFIG = {
     "system_instruction": (
         "You are an automated Banking and Transactions Agent.\n"
@@ -99,7 +119,12 @@ BANKING_CONFIG = {
                 "description": "Retrieves account balance and status.",
                 "parameters": {
                     "type": "object",
-                    "properties": {"account_id": {"type": "string", "description": "The account ID."}},
+                    "properties": {
+                        "account_id": {
+                            "type": "string",
+                            "description": "The account ID.",
+                        }
+                    },
                     "required": ["account_id"],
                 },
             },
@@ -112,11 +137,24 @@ BANKING_CONFIG = {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "from_account": {"type": "string", "description": "Source account ID."},
-                        "to_account": {"type": "string", "description": "Destination account ID."},
-                        "amount": {"type": "number", "description": "Amount to transfer."},
+                        "from_account": {
+                            "type": "string",
+                            "description": "Source account ID.",
+                        },
+                        "to_account": {
+                            "type": "string",
+                            "description": "Destination account ID.",
+                        },
+                        "amount": {
+                            "type": "number",
+                            "description": "Amount to transfer.",
+                        },
                     },
-                    "required": ["from_account", "to_account", "amount"],
+                    "required": [
+                        "from_account",
+                        "to_account",
+                        "amount",
+                    ],
                 },
             },
         },
@@ -128,8 +166,14 @@ BANKING_CONFIG = {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "card_id": {"type": "string", "description": "The card ID to freeze."},
-                        "reason": {"type": "string", "description": "Reason for freezing."},
+                        "card_id": {
+                            "type": "string",
+                            "description": "The card ID to freeze.",
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Reason for freezing.",
+                        },
                     },
                     "required": ["card_id"],
                 },
@@ -138,9 +182,11 @@ BANKING_CONFIG = {
     ],
 }
 
+
 # ==========================================
 # 3. IT HELPDESK AGENT
 # ==========================================
+
 IT_HELPDESK_CONFIG = {
     "system_instruction": (
         "You are an internal IT Helpdesk Support Agent.\n"
@@ -157,7 +203,12 @@ IT_HELPDESK_CONFIG = {
                 "description": "Fetches details of an IT support ticket.",
                 "parameters": {
                     "type": "object",
-                    "properties": {"ticket_id": {"type": "string", "description": "The ticket ID."}},
+                    "properties": {
+                        "ticket_id": {
+                            "type": "string",
+                            "description": "The ticket ID.",
+                        }
+                    },
                     "required": ["ticket_id"],
                 },
             },
@@ -170,8 +221,14 @@ IT_HELPDESK_CONFIG = {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "username": {"type": "string", "description": "Corporate username."},
-                        "employee_id": {"type": "string", "description": "Verified employee ID."},
+                        "username": {
+                            "type": "string",
+                            "description": "Corporate username.",
+                        },
+                        "employee_id": {
+                            "type": "string",
+                            "description": "Verified employee ID.",
+                        },
                     },
                     "required": ["username", "employee_id"],
                 },
@@ -185,16 +242,30 @@ IT_HELPDESK_CONFIG = {
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "username": {"type": "string", "description": "Corporate username."},
-                        "employee_id": {"type": "string", "description": "Verified employee ID."},
-                        "duration_hours": {"type": "integer", "description": "Access duration in hours (max 24)."},
+                        "username": {
+                            "type": "string",
+                            "description": "Corporate username.",
+                        },
+                        "employee_id": {
+                            "type": "string",
+                            "description": "Verified employee ID.",
+                        },
+                        "duration_hours": {
+                            "type": "integer",
+                            "description": "Access duration in hours (max 24).",
+                        },
                     },
-                    "required": ["username", "employee_id", "duration_hours"],
+                    "required": [
+                        "username",
+                        "employee_id",
+                        "duration_hours",
+                    ],
                 },
             },
         },
     ],
 }
+
 
 AGENT_REGISTRY = {
     "customer_support": CUSTOMER_SUPPORT_CONFIG,
@@ -218,11 +289,12 @@ def _build_groq_tools(tool_configs):
     ]
 
 
-def load_registered_aut() -> None:
-    """Register the user-provided Agent Under Test from agent_config.json."""
+def load_registered_aut() -> dict:
+    """Load the current Agent Under Test config without mutating global state."""
     config_path = Path(__file__).resolve().parents[1] / "agent_config.json"
     config = load_agent_config(config_path)
-    AGENT_REGISTRY["aut"] = {
+
+    return {
         "system_instruction": config["system_prompt"],
         "tools": _build_groq_tools(config["tools"]),
     }
@@ -231,25 +303,41 @@ def load_registered_aut() -> None:
 # ==========================================
 # GENERIC AGENT RUNNER LOOP
 # ==========================================
-def run_agent(agent_type: str, user_prompt: str, mock_tool_executor, max_turns: int = 5) -> dict:
+
+def run_agent(
+    agent_type: str,
+    user_prompt: str,
+    mock_tool_executor,
+    max_turns: int = 5,
+) -> dict:
     """
     Executes a multi-turn tool calling loop for the chosen agent.
 
     :param agent_type: 'customer_support', 'banking', 'it_helpdesk', or 'aut'
     :param user_prompt: Scenario test prompt
-    :param mock_tool_executor: Function provided by your partner, signature: mock_tool_executor(tool_name: str, args: dict) -> dict
+    :param mock_tool_executor: Function provided by your partner,
+                               signature: mock_tool_executor(tool_name: str, args: dict) -> dict
     :param max_turns: Maximum conversation turns before timeout
     :return: Full execution trace dictionary
     """
-    if agent_type == "aut":
-        load_registered_aut()
-    if agent_type not in AGENT_REGISTRY:
-        raise ValueError(f"Unknown agent type: {agent_type}")
 
-    config = AGENT_REGISTRY[agent_type]
+    if agent_type == "aut":
+        config = load_registered_aut()
+    else:
+        if agent_type not in AGENT_REGISTRY:
+            raise ValueError(f"Unknown agent type: {agent_type}")
+
+        config = AGENT_REGISTRY[agent_type]
+
     messages = [
-        {"role": "system", "content": config["system_instruction"]},
-        {"role": "user", "content": user_prompt},
+        {
+            "role": "system",
+            "content": config["system_instruction"],
+        },
+        {
+            "role": "user",
+            "content": user_prompt,
+        },
     ]
 
     trace_events = []
@@ -262,6 +350,7 @@ def run_agent(agent_type: str, user_prompt: str, mock_tool_executor, max_turns: 
             tools=config["tools"],
             temperature=0.0,
         )
+
         message = response.choices[0].message
 
         if message.tool_calls:
@@ -273,7 +362,10 @@ def run_agent(agent_type: str, user_prompt: str, mock_tool_executor, max_turns: 
                         {
                             "id": call.id,
                             "type": "function",
-                            "function": {"name": call.function.name, "arguments": call.function.arguments},
+                            "function": {
+                                "name": call.function.name,
+                                "arguments": call.function.arguments,
+                            },
                         }
                         for call in message.tool_calls
                     ],
@@ -282,12 +374,19 @@ def run_agent(agent_type: str, user_prompt: str, mock_tool_executor, max_turns: 
 
             for call in message.tool_calls:
                 try:
-                    call_args = json.loads(call.function.arguments) if call.function.arguments else {}
+                    call_args = (
+                        json.loads(call.function.arguments)
+                        if call.function.arguments
+                        else {}
+                    )
                 except json.JSONDecodeError:
                     call_args = {}
 
-                # Execute tool using your partner's mock tool registry
-                tool_output = mock_tool_executor(call.function.name, call_args)
+                # Execute tool using the mock tool registry
+                tool_output = mock_tool_executor(
+                    call.function.name,
+                    call_args,
+                )
 
                 # Record trace event
                 trace_events.append(
@@ -304,13 +403,24 @@ def run_agent(agent_type: str, user_prompt: str, mock_tool_executor, max_turns: 
                     {
                         "role": "tool",
                         "tool_call_id": call.id,
-                        "content": json.dumps({"result": tool_output}),
+                        "content": json.dumps(
+                            {"result": tool_output}
+                        ),
                     }
                 )
+
         else:
             # Model generated a regular text response
             final_text = message.content or ""
-            trace_events.append({"turn": turn + 1, "action": "text_response", "content": final_text})
+
+            trace_events.append(
+                {
+                    "turn": turn + 1,
+                    "action": "text_response",
+                    "content": final_text,
+                }
+            )
+
             return {
                 "status": "COMPLETED",
                 "turns_used": turn + 1,

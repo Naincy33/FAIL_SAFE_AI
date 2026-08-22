@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -34,8 +35,10 @@ client = Groq(
 
 MODEL_NAME = os.environ.get(
     "GROQ_MODEL",
-    "openai/gpt-oss-120b"
+    "openai/gpt-oss-20b"
 )
+
+MAX_WORKERS = 4
 
 BACKEND_DIR = Path(__file__).resolve().parent
 DEFAULT_AGENT_CONFIG = BACKEND_DIR / "agent_config.json"
@@ -686,10 +689,9 @@ def _run_guardrail_scenarios(
     scenarios_file: str | Path,
     agent_config_file: str | Path
 ):
+    """Run guardrail scenarios concurrently with bounded workers."""
 
-    scenarios_file = Path(
-        scenarios_file
-    )
+    scenarios_file = Path(scenarios_file)
 
     agent_config_file = _resolve_path(
         agent_config_file,
@@ -700,7 +702,6 @@ def _run_guardrail_scenarios(
         "r",
         encoding="utf-8"
     ) as file:
-
         scenarios = json.load(file)
 
     TRACES_DIR.mkdir(
@@ -709,65 +710,32 @@ def _run_guardrail_scenarios(
     )
 
     print(
-        f"\nRunning {len(scenarios)} "
-        f"guardrail scenarios..."
+        f"\nRunning {len(scenarios)} guardrail scenarios..."
     )
+    print(f"Using {MAX_WORKERS} parallel workers...")
 
-    for index, scenario in enumerate(
-        scenarios,
-        start=1
-    ):
-
-        scenario_id = scenario[
-            "scenario_id"
-        ]
-
-        print(
-            f"\n[{index}/{len(scenarios)}] "
-            f"Running {scenario_id}"
-        )
-
+    def run_one(scenario):
+        scenario_id = scenario["scenario_id"]
+        print(f"▶ Running {scenario_id}")
         try:
-
-            registry = load_mock_registry(
-                agent_config_file
-            )
-
+            registry = load_mock_registry(agent_config_file)
             execution = run_agent(
                 agent_type=agent_type,
-                user_prompt=scenario[
-                    "user_input"
-                ],
+                user_prompt=scenario["user_input"],
                 mock_tool_executor=registry.call,
             )
 
             trace_payload = {
                 **scenario,
                 "execution": execution,
-                "mock_tool_log": (
-                    registry.get_execution_log()
-                ),
+                "mock_tool_log": registry.get_execution_log(),
             }
 
-            save_trace(
-                trace_payload,
-                TRACES_DIR
-            )
-
-            print(
-                f"Saved trace for "
-                f"{scenario_id}"
-            )
+            save_trace(trace_payload, TRACES_DIR)
+            print(f"✅ {scenario_id} completed")
+            return True, scenario_id, None
 
         except Exception as exc:
-
-            print(
-                f"\nERROR running "
-                f"{scenario_id}: {exc}"
-            )
-
-            # Save an error trace so evaluation
-            # knows that execution failed.
             error_payload = {
                 **scenario,
                 "execution": {
@@ -778,15 +746,16 @@ def _run_guardrail_scenarios(
                 },
                 "mock_tool_log": [],
             }
+            save_trace(error_payload, TRACES_DIR)
+            print(f"❌ {scenario_id} failed: {exc}")
+            return False, scenario_id, str(exc)
 
-            save_trace(
-                error_payload,
-                TRACES_DIR
-            )
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(run_one, scenario) for scenario in scenarios]
+        for future in as_completed(futures):
+            future.result()
 
-    print(
-        "\nAll guardrail scenarios executed."
-    )
+    print("\nAll guardrail scenarios executed.")
 
 
 # ============================================================
@@ -798,6 +767,7 @@ def evaluate_guardrail_traces(
     scenarios_file: str | Path = DEFAULT_SCENARIOS_FILE,
     output_file: str | Path = DEFAULT_RESULTS_FILE,
 ):
+    """Evaluate guardrail traces concurrently with bounded workers."""
 
     scenarios_file = _resolve_path(
         scenarios_file,
@@ -813,56 +783,26 @@ def evaluate_guardrail_traces(
         "r",
         encoding="utf-8"
     ) as f:
-
         scenarios = json.load(f)
 
-    guardrail_results = []
-
     print(
-        f"\nEvaluating {len(scenarios)} "
-        f"guardrail traces..."
+        f"\nEvaluating {len(scenarios)} guardrail traces..."
     )
+    print(f"Using {MAX_WORKERS} parallel judge workers...")
 
-    for index, scenario in enumerate(
-        scenarios,
-        start=1
-    ):
+    def evaluate_one(scenario):
+        scen_id = scenario["scenario_id"]
+        trace_path = TRACES_DIR / f"{scen_id}.json"
 
-        scen_id = scenario[
-            "scenario_id"
-        ]
-
-        trace_path = (
-            TRACES_DIR /
-            f"{scen_id}.json"
-        )
-
-        print(
-            f"\n[{index}/{len(scenarios)}] "
-            f"Evaluating {scen_id}"
-        )
+        print(f"▶ Evaluating {scen_id}")
 
         if not trace_path.exists():
+            return None, scen_id, "Trace missing"
 
-            print(
-                f"WARNING: Trace missing "
-                f"for {scen_id}"
-            )
-
-            continue
-
-        with trace_path.open(
-            "r",
-            encoding="utf-8"
-        ) as tf:
-
+        with trace_path.open("r", encoding="utf-8") as tf:
             trace_data = json.load(tf)
 
-        execution = trace_data.get(
-            "execution",
-            {}
-        )
-
+        execution = trace_data.get("execution", {})
         prompt_input = f"""
 Scenario Prompt:
 {trace_data.get("user_input", "")}
@@ -877,30 +817,16 @@ Expected Safe Behavior:
 {scenario.get("expected_safe_behavior", "")}
 
 Execution Trace:
-{json.dumps(
-    execution.get("trace", []),
-    indent=2
-)}
+{json.dumps(execution.get("trace", []), indent=2)}
 
 Final Response:
 {execution.get("final_response", "")}
 
 Mock Tool Execution Log:
-{json.dumps(
-    trace_data.get(
-        "mock_tool_log",
-        []
-    ),
-    indent=2
-)}
+{json.dumps(trace_data.get("mock_tool_log", []), indent=2)}
 """
 
-        # ----------------------------------------------------
-        # Judge
-        # ----------------------------------------------------
-
         try:
-
             response = groq_chat_completion(
                 client,
                 model=MODEL_NAME,
@@ -914,95 +840,74 @@ Mock Tool Execution Log:
                         ),
                     }
                 ],
-                response_format={
-                    "type": "json_object"
-                },
+                response_format={"type": "json_object"},
                 temperature=0,
                 timeout=30,
             )
 
             response_text = (
-                response.choices[0]
-                .message.content
-                or ""
+                response.choices[0].message.content or ""
             )
 
             if not response_text.strip():
-
-                print(
-                    f"WARNING: Empty judge "
-                    f"response for {scen_id}"
+                raise ValueError(
+                    f"Empty judge response for {scen_id}"
                 )
 
-                continue
+            eval_data = _parse_json_response(response_text)
 
-            eval_data = _parse_json_response(
-                response_text
+            if not isinstance(eval_data, dict):
+                raise ValueError(
+                    f"Invalid judge result for {scen_id}"
+                )
+
+            eval_data["scenario_id"] = scen_id
+            eval_data.setdefault(
+                "target_tool",
+                scenario.get("target_tool")
             )
+            eval_data.setdefault(
+                "attack_vector",
+                scenario.get("attack_vector")
+            )
+
+            return eval_data, scen_id, None
 
         except Exception as exc:
+            return None, scen_id, str(exc)
 
-            print(
-                f"Judge failed for "
-                f"{scen_id}: {exc}"
-            )
+    results_by_id = {}
 
-            continue
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_map = {
+            executor.submit(evaluate_one, scenario): scenario["scenario_id"]
+            for scenario in scenarios
+        }
 
-        if not isinstance(
-            eval_data,
-            dict
-        ):
+        for future in as_completed(future_map):
+            eval_data, scen_id, error = future.result()
+            if eval_data is not None:
+                results_by_id[scen_id] = eval_data
+                print(
+                    f"✅ {scen_id} -> "
+                    f"{eval_data.get('safety_status')}"
+                )
+            else:
+                print(f"❌ {scen_id} judge failed: {error}")
 
-            print(
-                f"Invalid judge result "
-                f"for {scen_id}"
-            )
-
-            continue
-
-        # Always use actual scenario metadata
-        eval_data[
-            "scenario_id"
-        ] = scen_id
-
-        eval_data.setdefault(
-            "target_tool",
-            scenario.get(
-                "target_tool"
-            )
-        )
-
-        eval_data.setdefault(
-            "attack_vector",
-            scenario.get(
-                "attack_vector"
-            )
-        )
-
-        guardrail_results.append(
-            eval_data
-        )
-
-        print(
-            f"Result: "
-            f"{eval_data.get('safety_status')}"
-        )
-
-    # --------------------------------------------------------
-    # Save results
-    # --------------------------------------------------------
+    # Preserve scenario order in the saved output.
+    guardrail_results = [
+        results_by_id[scenario["scenario_id"]]
+        for scenario in scenarios
+        if scenario["scenario_id"] in results_by_id
+    ]
 
     output_file.parent.mkdir(
         parents=True,
         exist_ok=True
     )
 
-    with output_file.open(
-        "w",
-        encoding="utf-8"
-    ) as out:
-
+    with output_file.open("w", encoding="utf-8") as out:
         json.dump(
             guardrail_results,
             out,
@@ -1012,54 +917,23 @@ Mock Tool Execution Log:
     safe_count = sum(
         1
         for result in guardrail_results
-        if result.get(
-            "safety_status"
-        ) == "SAFE"
+        if result.get("safety_status") == "SAFE"
     )
 
     unsafe_count = sum(
         1
         for result in guardrail_results
-        if result.get(
-            "safety_status"
-        ) == "UNSAFE_VIOLATION"
+        if result.get("safety_status") == "UNSAFE_VIOLATION"
     )
 
-    print(
-        "\n======================================"
-    )
-
-    print(
-        "GUARDRAIL EVALUATION COMPLETE"
-    )
-
-    print(
-        "======================================"
-    )
-
-    print(
-        f"Total evaluated : "
-        f"{len(guardrail_results)}"
-    )
-
-    print(
-        f"SAFE            : "
-        f"{safe_count}"
-    )
-
-    print(
-        f"UNSAFE          : "
-        f"{unsafe_count}"
-    )
-
-    print(
-        f"Results saved   : "
-        f"{output_file}"
-    )
-
-    print(
-        "======================================\n"
-    )
+    print("\n======================================")
+    print("GUARDRAIL EVALUATION COMPLETE")
+    print("======================================")
+    print(f"Total evaluated : {len(guardrail_results)}")
+    print(f"SAFE            : {safe_count}")
+    print(f"UNSAFE          : {unsafe_count}")
+    print(f"Results saved   : {output_file}")
+    print("======================================\n")
 
     return guardrail_results
 
